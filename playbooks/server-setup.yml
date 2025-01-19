@@ -4,150 +4,143 @@
   become: true
   gather_facts: true
   vars_files:
-    - ../vars/identity.yml  # Adjust path as needed
+    - ../vars/identity.yml
 
   tasks:
-    - name: Ensure apt cache is up to date
-      apt:
-        update_cache: yes
+    - name: Setup apt and unattended-upgrades
+      block:
+      - name: Ensure apt cache is up to date
+        apt:
+          update_cache: yes
 
-    - name: Install required packages (unattended upgrades, etc.)
-      apt:
-        name:
-          - unattended-upgrades
-          - apt-transport-https
-          - ca-certificates
-        state: present
+      - name: Install required packages (unattended upgrades, etc.)
+        apt:
+          name:
+            - unattended-upgrades
+            - apt-transport-https
+            - ca-certificates
+          state: present
 
-    - name: Configure unattended-upgrades
-      copy:
-        dest: /etc/apt/apt.conf.d/50unattended-upgrades
-        content: |
-          Unattended-Upgrade::Allowed-Origins {
-              "${distro_id}:${distro_codename}";
-              "${distro_id}:${distro_codename}-security";
-              "${distro_id}ESMApps:${distro_codename}-apps-security";
-              "${distro_id}ESM:${distro_codename}-infra-security";
-          };
-          Unattended-Upgrade::Remove-Unused-Dependencies "true";
-          Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
-          Unattended-Upgrade::Automatic-Reboot "true";
-          Unattended-Upgrade::Automatic-Reboot-Time "03:00";
+      - name: Configure unattended-upgrades
+        copy:
+          dest: /etc/apt/apt.conf.d/50unattended-upgrades
+          content: |
+            Unattended-Upgrade::Allowed-Origins {
+                "${distro_id}:${distro_codename}";
+                "${distro_id}:${distro_codename}-security";
+                "${distro_id}ESMApps:${distro_codename}-apps-security";
+                "${distro_id}ESM:${distro_codename}-infra-security";
+            };
+            Unattended-Upgrade::Remove-Unused-Dependencies "true";
+            Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+            Unattended-Upgrade::Automatic-Reboot "true";
+            Unattended-Upgrade::Automatic-Reboot-Time "03:00";
 
-    - name: Enable unattended-upgrades periodically
-      copy:
-        dest: /etc/apt/apt.conf.d/20auto-upgrades
-        content: |
-          APT::Periodic::Update-Package-Lists "1";
-          APT::Periodic::Unattended-Upgrade "1";
-          APT::Periodic::Download-Upgradeable-Packages "1";
-          APT::Periodic::AutocleanInterval "7";
+      - name: Enable unattended-upgrades periodically
+        copy:
+          dest: /etc/apt/apt.conf.d/20auto-upgrades
+          content: |
+            APT::Periodic::Update-Package-Lists "1";
+            APT::Periodic::Unattended-Upgrade "1";
+            APT::Periodic::Download-Upgradeable-Packages "1";
+            APT::Periodic::AutocleanInterval "7";
 
-    #####################################################
-    # Install additional utility packages (btop, neovim)
-    #####################################################
-    - name: Install utility packages
-      apt:
-        update_cache: yes
-        name:
-          - btop
-          - neovim
-          - tmux
-          - bat
-          - eza
-          - wget
-          - curl
-          - fd-find
-          - ripgrep
-          - yq
-          - jq
-          - ranger
-        state: present
+    - name: Personalize system
+      block:
+      - name: Install utility packages
+        apt:
+          update_cache: yes
+          name:
+            - btop
+            - neovim
+            - tmux
+            - bat
+            - eza
+            - wget
+            - curl
+            - fd-find
+            - ripgrep
+            - yq
+            - jq
+            - ranger
+          state: present
 
-    #####################################################
-    # Harden SSH server configuration
-    #####################################################
-    - name: Deploy hardened SSHD config from template
-      template:
-        src: sshd_config.j2
-        dest: /etc/ssh/sshd_config
-        owner: root
-        group: root
-        mode: '0644'
-      notify:
-        - restart ssh
+    - name: Harden server configuration
+      block:
+      - name: Deploy hardened SSHD config from template
+        template:
+          src: sshd_config.j2
+          dest: /etc/ssh/sshd_config
+          owner: root
+          group: root
+          mode: '0644'
+        notify:
+          - restart ssh
 
-    #################################
-    # UFW (Uncomplicated Firewall)
-    #################################
-    - name: Ensure UFW is installed
-      apt:
-        name: ufw
-        state: present
+      - name: Ensure UFW is installed
+        apt:
+          name: ufw
+          state: present
 
-    - name: Set default UFW incoming policy to deny (disabled for now)
-      ufw:
-        direction: incoming
-        policy: deny
-        state: disabled
+      - name: Set default UFW incoming policy to deny (disabled for now)
+        ufw:
+          direction: incoming
+          policy: deny
+          state: disabled
 
-    - name: Allow SSH (port 22)
-      ufw:
-        rule: allow
-        port: "22"
-        proto: tcp
+      - name: Allow SSH (port 22)
+        ufw:
+          rule: allow
+          port: "22"
+          proto: tcp
 
-    - name: Enable UFW
-      ufw:
-        state: enabled
-        direction: incoming
-        policy: deny
+      - name: Enable UFW
+        ufw:
+          state: enabled
+          direction: incoming
+          policy: deny
 
-    ###################################################
-    # 5. Install Fail2ban
-    ###################################################
-    - name: Install fail2ban
-      apt:
-        name: fail2ban
-        state: present
-      notify:
-        - restart fail2ban
+      - name: Install fail2ban
+        apt:
+          name: fail2ban
+          state: present
+        notify:
+          - restart fail2ban
 
-    - name: Configure Fail2ban jail for SSH
-      copy:
-        dest: /etc/fail2ban/jail.d/ssh.local
-        mode: '0644'
-        content: |
-          [sshd]
-          enabled = true
-          port    = 22
-          logpath = /var/log/auth.log
-          banaction = iptables-multiport
-          maxretry = 3
-          bantime  = 600
-          findtime = 600
-      notify:
-        - restart fail2ban
+      - name: Configure Fail2ban jail for SSH
+        copy:
+          dest: /etc/fail2ban/jail.d/ssh.local
+          mode: '0644'
+          content: |
+            [sshd]
+            enabled = true
+            port    = 22
+            logpath = /var/log/auth.log
+            banaction = iptables-multiport
+            maxretry = 3
+            bantime  = 600
+            findtime = 600
+        notify:
+          - restart fail2ban
 
-    ################################################################
-    # Install Docker
-    ################################################################
-    - name: Install Docker
-      apt:
-        name: docker.io
-        state: present
+    - name: Setup docker
+      block:
+      - name: Install Docker
+        apt:
+          name: docker.io
+          state: present
 
-    - name: Enable and start Docker daemon
-      systemd:
-        name: docker
-        enabled: true
-        state: started
+      - name: Enable and start Docker daemon
+        systemd:
+          name: docker
+          enabled: true
+          state: started
 
-    - name: Add admin user to docker group
-      user:
-        name: "{{ identity.admin_user }}"
-        groups: docker
-        append: yes
+      - name: Add admin user to docker group
+        user:
+          name: "{{ identity.admin_user }}"
+          groups: docker
+          append: yes
 
   ###################################################
   # Handlers
