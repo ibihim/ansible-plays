@@ -2,6 +2,7 @@
 INVENTORY       = inventory.ini
 SERVER_PLAYBOOK = playbooks/server-setup.yml
 MC_PLAYBOOK     = playbooks/minecraft.yml
+COPY_CMD        = wl-copy
 
 .PHONY: help server server-check minecraft minecraft-check
 
@@ -28,3 +29,22 @@ minecraft:
 ## minecraft-check: Perform a 'dry run' of the minecraft playbook
 minecraft-check:
 	ansible-playbook -i $(INVENTORY) $(MC_PLAYBOOK) --check
+
+copy-to-clipboard:
+	@echo "Creating consolidated snippet to clipboard..."
+	@( \
+	  echo "Tree output"; \
+	  echo "\`\`\`"; \
+	  tree -I '.git'; \
+	  echo "\`\`\`"; \
+	  echo ""; \
+	  echo "playbooks/minecraft.yml"; \
+	  echo "\`\`\`yaml"; \
+	  cat playbooks/minecraft.yml; \
+	  echo "\`\`\`"; \
+	  echo "playbooks/server-setup.yml"; \
+	  echo "\`\`\`yaml"; \
+	  cat playbooks/server-setup.yml; \
+	  echo "\`\`\`"; \
+	) | $(COPY_CMD)
+	@echo "✅ Copied project tree + minecraft.yml,server-setup.yml to the clipboard."
