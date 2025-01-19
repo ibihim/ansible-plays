@@ -1,0 +1,105 @@
+---
+- name: Manage Minecraft on Ubuntu
+  hosts: minecraft
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../vars/minecraft.yml  # Adjust if located elsewhere
+
+  tasks:
+    ###################################################
+    # 1. UFW rules for Minecraft (UDP 19132, 19133)
+    ###################################################
+    - name: Allow Minecraft UDP ports
+      ufw:
+        rule: allow
+        port: "19132,19133"
+        proto: udp
+
+    ###################################################
+    # 2. Create the 'gameserver' user & directories
+    #
+    #    Moved here, as it's specific to running Minecraft.
+    ###################################################
+    - name: Create service user 'gameserver'
+      user:
+        name: gameserver
+        system: true
+        create_home: true
+        home: /opt/gameserver
+        shell: /bin/bash
+
+    - name: Create directories for data
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: gameserver
+        group: gameserver
+        mode: '0755'
+      loop:
+        - /opt/gameserver/data
+        - "{{ minecraft.world_data_path }}"
+
+    - name: Configure log rotation for game data
+      copy:
+        dest: /etc/logrotate.d/gameserver
+        content: |
+          /opt/gameserver/data/logs/*.log {
+            weekly
+            rotate 4
+            compress
+            missingok
+            notifempty
+            create 0644 gameserver gameserver
+          }
+          {{ minecraft.world_data_path }}/**/*.log {
+            weekly
+            rotate 4
+            compress
+            missingok
+            notifempty
+            create 0644 gameserver gameserver
+          }
+
+    ###################################################
+    # 3. Stop any existing container if needed
+    #    (Optional - if you want to forcibly ensure old 
+    #     container is not interfering.)
+    ###################################################
+    - name: Stop old container if it exists
+      community.docker.docker_container:
+        name: "minecraft-bedrock"
+        state: stopped
+      ignore_errors: true
+
+    ###################################################
+    # 4. Launch the Minecraft Bedrock container
+    ###################################################
+    - name: Run Minecraft Bedrock container
+      community.docker.docker_container:
+        name: "minecraft-bedrock"
+        image: "itzg/minecraft-bedrock-server:latest"
+        pull: true
+        recreate: false
+        state: started
+
+        published_ports:
+          - "19132:19132/udp"
+          - "19133:19133/udp"
+
+        volumes:
+          - "/opt/gameserver/data:/data"
+          - "{{ minecraft.world_data_path }}:/data/worlds"
+
+        env:
+          EULA: "TRUE"
+          TZ: "{{ minecraft.timezone }}"
+          GAMEMODE: "{{ minecraft.gamemode }}"
+          DIFFICULTY: "{{ minecraft.difficulty }}"
+          LEVEL_NAME: "{{ minecraft.level_name }}"
+          LEVEL_SEED: "{{ minecraft.level_seed }}"
+          SERVER_NAME: "{{ minecraft.name }}"
+          MAX_PLAYERS: "{{ minecraft.max_players }}"
+          ALLOW_CHEATS: "{{ minecraft.allow_cheats }}"
+          ONLINE_MODE: "{{ minecraft.online_mode }}"
+        restart_policy: "always"

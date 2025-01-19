@@ -1,0 +1,11 @@
+minecraft:
+  name: "tiny-ubuntu"
+  gamemode: "survival"
+  difficulty: "normal"
+  level_name: "ostrowscy-1"
+  level_seed: "7671040200380562212"
+  max_players: "10"
+  allow_cheats: "false"
+  online_mode: "true"
+  world_data_path: "/opt/gamedata"
+  timezone: "Europe/Berlin"
