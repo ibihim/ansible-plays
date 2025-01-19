@@ -94,6 +94,10 @@
           port: "22"
           proto: tcp
 
+      - name: Reload UFW
+        ufw:
+          state: reload
+
       - name: Enable UFW
         ufw:
           state: enabled
